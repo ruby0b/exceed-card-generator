@@ -12,7 +12,7 @@ Arguments used: `input/Slayer --no-duplicates --grid 6x3`
 
 - Using [nix](https://nixos.org/): `nix run github:ruby0b/exceed-card-generator -- --help`
 - Otherwise, make sure python and pillow are installed: `pip install -U pillow`
-  - Run the script: `python exceed-card-generator.py --help`
+  - Run the script: `python main.py --help`
   - Make sure to have the assets subdir in the current working directory (or set the ASSETS environment variable)
 
 ### Help
