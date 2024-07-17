@@ -142,7 +142,7 @@ KEYWORDS = [
         BOLD + COLOR("orange"),
         NO_BOLD + NO_COLOR + ICON("continuous"),
     ),
-    Keyword(r"{AMOUNT}Force", [], [ICON("force")]),
+    Keyword(rf"{AMOUNT}Force", [], [ICON("force")]),
     Keyword(r"BEFORE:", BOLD, NO_BOLD),
     Keyword(rf"HIT(?:, RANGE {NUM})?:", BOLD, NO_BOLD),
     Keyword(r"AFTER:", BOLD, NO_BOLD),
