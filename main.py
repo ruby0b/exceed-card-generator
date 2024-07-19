@@ -58,20 +58,6 @@ Chunk = TextChunk | ColorChunk | ItalicChunk | BoldChunk | IconChunk
 ASSETS = Path("assets" if Path("assets").is_dir() else os.environ["ASSETS"])
 ASSET_IMG = lambda path: Image.open(ASSETS / path)
 ASSET_JSON = lambda path: json.loads((ASSETS / path).read_text())
-SPECIAL_BASE = ASSET_IMG("special-base.png")
-PORTRAIT_MASK = ASSET_IMG("mask-portrait.png")
-INSTANT_BOOST = ASSET_IMG("special-instant.png")
-INSTANT_BOOST_CANCEL = ASSET_IMG("special-instant-cancel.png")
-CONTINUOUS_BOOST = ASSET_IMG("special-continuous.png")
-CONTINUOUS_BOOST_CANCEL = ASSET_IMG("special-continuous-cancel.png")
-ULTRA_BAR = ASSET_IMG("special-ultra.png")
-SPECIAL_BAR = ASSET_IMG("special-special.png")
-ARMOR_BAR = ASSET_IMG("special-armor.png")
-GUARD_BAR = ASSET_IMG("special-guard.png")
-INNATE_BG = ASSET_IMG("innate-bg.png")
-INNATE_BASE = ASSET_IMG("innate-base.png")
-EXCEED_BG = ASSET_IMG("exceed-bg.png")
-EXCEED_BASE = ASSET_IMG("exceed-base.png")
 
 # Data
 NORMALS_DATA = ASSET_JSON("normals.json")
@@ -323,9 +309,9 @@ def interpret_layer(
             if pattern == "match":
                 continue
             if re.match(pattern, value):
-                print(f"Match: {pattern}")
                 for sub_layer in sub_layers:
                     interpret_layer(sub_layer, img, row, fonts)
+                break
 
 
 def interpret_all_expressions(d: dict, row: dict[str, str]):
@@ -345,6 +331,7 @@ def interpret_expression(expr, row: dict[str, str]):
                 continue
             if re.match(pattern, value):
                 return interpret_expression(sub_expr, row)
+        return None
     elif isinstance(expr, str):
         return FilenameFormatter().format(expr, **row)
     return expr
@@ -559,19 +546,17 @@ def csv_to_cards(
     output = output or Path("output") / character
     output.mkdir(exist_ok=True, parents=True)
 
-    portrait = open_image(folder / "portrait.jpg")
-
     with open(csv, newline="") as f:
         rows = list(DictReader(f))
 
     data = [{k.lower().replace(" ", "_"): v for k, v in row.items()} for row in rows]
 
     cards = {
-        "innate": [],
-        "exceed": [],
-        "special": [],
-        "ultra": [],
-        "normal": [],
+        "Innate": [],
+        "Exceed": [],
+        "Special": [],
+        "Ultra": [],
+        "Normal": [],
     }
 
     data.extend(NORMALS_DATA)
@@ -589,8 +574,6 @@ def csv_to_cards(
                     count=1,
                     flags=re.DOTALL,
                 )
-            if key in ["kind", "boost_type"]:
-                cell = cell.lower()
             if isinstance(cell, str) and cell.lower() == "false":
                 cell = False
             row[key] = cell
@@ -598,15 +581,14 @@ def csv_to_cards(
         if not row["name"]:
             continue
 
-        if no_normals and row["kind"] == "normal":
+        if no_normals and row["kind"] == "Normal":
             continue
 
         match row["kind"]:
-            case "special" | "ultra" | "normal":
-                row["portrait"] = portrait
+            case "Special" | "Ultra" | "Normal":
                 fname = Path(valid_filename(row["name"]) + ".png")
                 default_copies = 2
-            case "innate" | "exceed" as kind:
+            case "Innate" | "Exceed" as kind:
                 fname = f"{kind}.png"
                 default_copies = 1
             case "" | None:
@@ -622,19 +604,19 @@ def csv_to_cards(
         copies = 1 if no_duplicates else int(row.get("copies") or default_copies)
         cards[row["kind"]].extend(copies * [card])
 
-    foregrounds = cards["normal"] + cards["special"] + cards["ultra"] + cards["innate"]
+    foregrounds = cards["Normal"] + cards["Special"] + cards["Ultra"] + cards["Innate"]
     grid = grid or calculate_grid(len(foregrounds), 7, 7)
     g_fg = image_grid(foregrounds, *grid)
     g_fg.save(output / f"{character}-fg.jpg", quality=75, subsampling=0)
 
-    backgrounds = cards["exceed"]
+    backgrounds = cards["Exceed"]
     if (missing_bgs := len(foregrounds) - len(backgrounds)) > 0:
         backgrounds = [back] * missing_bgs + backgrounds
     g_bg = image_grid(backgrounds, *grid)
     g_bg.save(output / f"{character}-bg.jpg", quality=75, subsampling=0)
 
     references = []
-    for card in cards["special"] + cards["ultra"]:
+    for card in cards["Special"] + cards["Ultra"]:
         if card not in references:
             references.append(card)
     g_ref = image_grid(references, *calculate_grid(len(references), 10, 2))
