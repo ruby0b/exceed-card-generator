@@ -13,17 +13,35 @@
 # GNU General Public License for more details.
 # You can receive a copy of the GNU General Public License at <http://www.gnu.org/licenses/>.
 
+import copy
 import json
 import os
 import re
+import string
+import sys
 from argparse import ArgumentParser
 from collections import defaultdict, namedtuple
 from csv import DictReader
-from inspect import signature
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import Literal, Callable
+from typing import Callable
 
+from strictyaml import (
+    Any,
+    Bool,
+    dirty_load,
+    FixedSeq,
+    Int,
+    Map,
+    MapCombined,
+    MapPattern,
+    Optional,
+    Seq,
+    Str,
+    Validator,
+    YAML,
+    YAMLError,
+)
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # Types
@@ -79,38 +97,6 @@ TITLE_FONT = ImageFont.truetype(GGST_FONT_FILE, size=40)
 GAUGE_FONT = ImageFont.truetype(GGST_FONT_FILE, size=66)
 CHARACTER_NAME_FONT = ImageFont.truetype(GGST_FONT_FILE, size=56)
 
-# Colors
-INSTANT_BOOST_NAME_COLOR = "#d989b5"
-CONTINUOUS_BOOST_NAME_COLOR = "#ffa864"
-GAUGE_COST_COLOR = "#00adef"
-RANGE_STROKE = "#374fa2"
-POWER_STROKE = "#6a1f1f"
-SPEED_STROKE = "#7c531f"
-ARMOR_STROKE = "#581f59"
-GUARD_STROKE = "#2d5529"
-
-
-# Pixel Coordinates
-class SPECIAL_XY:
-    PORTRAIT_SIZE = (150, 150)
-    GAUGE_TOPLEFT = (62, 30)
-    NAME_TOPLEFT = (198, 43)
-    DESCRIPTION_TOPLEFT = (96, 680)
-    BOOST_NAME_TOPLEFT = (67, 840)
-    BOOST_DESCRIPTION_TOPLEFT = (96, 875)
-    RANGE_TOPLEFT = (49, 222)
-    POWER_TOPLEFT = (49, 312)
-    SPEED_TOPLEFT = (49, 402)
-    ARMOR_TOPLEFT = (49, 492)
-    GUARD_TOPLEFT = (49, 584)
-
-
-class INNATE_XY:
-    NAME_TOPLEFT = (65, 725)
-    DESCRIPTION_TOPLEFT = (96, 865)
-    GAUGE_TOPLEFT = (598, 732)
-
-
 # Keyword eDSL
 BOLD = [BoldChunk(True)]
 NO_BOLD = [BoldChunk(False)]
@@ -162,217 +148,206 @@ KEYWORDS = [
 ]
 
 
-def make_character_card(
-    *,
-    image: Image.Image | None,
-    name: str,
-    description: str,
-    kind: Literal["innate", "exceed"],
-    cost: str | None,
-) -> Image.Image:
-    output = Image.new("RGB", INNATE_BG.size)
-    match kind:
-        case "innate":
-            bg, base = INNATE_BG, INNATE_BASE
-        case "exceed":
-            bg, base = EXCEED_BG, EXCEED_BASE
-        case _:
-            raise ValueError(f"Unknown kind: {kind}")
-    output.paste(bg)
-    if image:
-        image = ImageOps.fit(image, bg.size)
-        output.paste(image, mask=image)
-    output.paste(base, mask=base)
+def monkeypatch_method(cls):
+    def decorator(func):
+        setattr(cls, func.__name__, func)
+        return func
 
-    if cost:
+    return decorator
+
+
+@monkeypatch_method(Validator)
+def and_then(self, other):
+    new = copy.deepcopy(self)
+    setattr(new, "on_success", other)
+    return new
+
+
+@monkeypatch_method(Validator)
+def or_else(self, other):
+    new = copy.deepcopy(self)
+    setattr(new, "on_failure", other)
+    return new
+
+
+class Schema:
+    def expr(t):
+        t = copy.deepcopy(t)
+        t.on_failure = MapCombined({"match": Str()}, Str(), t)
+        return Any().and_then(t)
+
+    color = Str()
+    font = Str()
+    xy = FixedSeq([Int(), Int()])
+    text = MapCombined({"text": Str()}, Str(), Any()).and_then(
+        Map(
+            {
+                "text": expr(Str()),
+                "xy": expr(xy),
+                "font": expr(font),
+                "fill": expr(color),
+                Optional("width"): expr(Int()),
+                Optional("shadow"): expr(
+                    Map({"offset": expr(xy), "fill": expr(color)})
+                ),
+                Optional("rich"): expr(Bool()),
+                Optional("align"): expr(Bool()),
+                Optional("centered"): expr(Bool()),
+                Optional("stroke_width"): expr(Int()),
+                Optional("stroke_fill"): expr(color),
+            }
+        )
+    )
+    image = MapCombined({"image": Str()}, Str(), Any()).and_then(
+        Map(
+            {
+                "image": expr(Str()),
+                Optional("xy"): expr(xy),
+                Optional("fit"): expr(xy),
+                Optional("mask", default=True): expr(Bool() | Str()),
+            }
+        )
+    )
+    match = MapCombined({"match": Str()}, Str(), Any())
+    layers = Seq(MapPattern(Str(), Any()).and_then(text.or_else(image.or_else(match))))
+    match.on_success = MapCombined({"match": Str()}, Str(), layers)
+    schema = Map(
+        {
+            "fonts": MapPattern(
+                Str(),
+                Map(
+                    {
+                        "file": Str(),
+                        "size": Int(),
+                        Optional("variations"): Map(
+                            {"regular": Str(), "bold": Str(), "italic": Str()}
+                        ),
+                    }
+                ),
+            ),
+            "layers": layers,
+        }
+    )
+
+
+def load_season(season_file: Path) -> dict:
+    yaml_str = season_file.read_text()
+    try:
+        yaml = dirty_load(
+            yaml_str, Schema.schema, label=season_file, allow_flow_style=True
+        )
+        bfs_revalidate(yaml)
+    except YAMLError as error:
+        print(error)
+        sys.exit(1)
+    return yaml.data
+
+
+def bfs_revalidate(yaml: YAML):
+    chain_revalidate(yaml)
+    if yaml.is_sequence():
+        for value in yaml:
+            bfs_revalidate(value)
+    elif yaml.is_mapping():
+        for key, value in yaml.items():
+            bfs_revalidate(value)
+
+
+def chain_revalidate(yaml: YAML, revalidator=None, errs: tuple[YAMLError, ...] = ()):
+    if not (revalidator := revalidator or getattr(yaml.validator, "on_success", None)):
+        return
+    try:
+        yaml.revalidate(revalidator)
+    except YAMLError as e:
+        if on_failure := getattr(revalidator, "on_failure", None):
+            chain_revalidate(yaml, revalidator=on_failure, errs=(*errs, e))
+        else:
+            if not errs:
+                raise e
+            err_msgs = ("Fix one of the following errors:", *errs, e)
+            raise YAMLError("\n\n".join(str(err) for err in err_msgs))
+    chain_revalidate(yaml, errs=errs)
+
+
+def interpret(data: dict, row: dict[str, str]) -> Image.Image:
+    img = Image.new("RGB", (750, 1024))
+    fonts = {
+        name: ImageFont.truetype(font["file"], size=font["size"])
+        for name, font in data["fonts"].items()
+    }
+    for layer in data["layers"]:
+        interpret_layer(layer, img, row, fonts)
+    return img
+
+
+def interpret_layer(
+    layer: dict, img: Image.Image, row: dict[str, str], fonts: dict[str, ImageFont]
+):
+    if "text" in layer:
+        data = interpret_all_expressions(layer, row)
         text(
-            cost,
-            img=output,
-            font=GAUGE_FONT,
-            topleft=INNATE_XY.GAUGE_TOPLEFT,
-            fill=GAUGE_COST_COLOR,
+            row[data["text"]],
+            img=img,
+            font=fonts[data["font"]],
+            topleft=data["xy"],
+            fill=data["fill"],
+            # width=data.get("width"),
+            # shadow=data.get("shadow"),
+            # rich=data.get("rich"),
+            # align=data.get("align"),
+            # centered=data.get("centered"),
+            stroke_width=data.get("stroke_width", 0),
+            stroke_fill=data.get("stroke_fill"),
         )
 
-    text(
-        name,
-        img=output,
-        font=CHARACTER_NAME_FONT,
-        topleft=INNATE_XY.NAME_TOPLEFT,
-        fill="white",
-    )
+    elif "image" in layer:
+        data = interpret_all_expressions(layer, row)
+        image_path = data["image"]
+        if not (image := open_image(image_path)):
+            return
 
-    rich_text(
-        description,
-        img=output,
-        family=TEXT_FONT_FAMILY,
-        topleft=INNATE_XY.DESCRIPTION_TOPLEFT,
-        max_width=DESCRIPTION_WIDTH,
-    )
+        if fit := data.get("fit"):
+            image = ImageOps.fit(image, fit)
 
-    return output
+        mask = None
+        if isinstance(mask_val := data.get("mask"), str):
+            mask = open_image(mask_val)
+        elif mask_val is True:
+            mask = image
+
+        img.paste(image, box=data.get("xy", (0, 0)), mask=mask)
+
+    elif "match" in layer:
+        value = row[layer["match"]]
+        for pattern, sub_layers in layer.items():
+            if pattern == "match":
+                continue
+            if re.match(pattern, value):
+                print(f"Match: {pattern}")
+                for sub_layer in sub_layers:
+                    interpret_layer(sub_layer, img, row, fonts)
 
 
-def make_move_card(
-    *,
-    image: Image.Image | None,
-    portrait: Image.Image | None = None,
-    name: str,
-    description: str,
-    boost: str,
-    boost_name: str,
-    boost_type: Literal["instant", "continuous"],
-    cancel: bool,
-    kind: Literal["special", "ultra"],
-    cost: str | None,
-    range: str,
-    power: str,
-    speed: str,
-    armor: str | None,
-    guard: str | None,
-) -> Image.Image:
-    output = Image.new("RGB", SPECIAL_BASE.size)
+def interpret_all_expressions(d: dict, row: dict[str, str]):
+    return {k: interpret_expression(v, row) for k, v in d.items()}
 
-    if image:
-        output.paste(ImageOps.fit(image, (665, 570)), box=(85, 100))
 
-    output.paste(SPECIAL_BASE, mask=SPECIAL_BASE)
+class FilenameFormatter(string.Formatter):
+    def convert_field(self, field, conversion):
+        return valid_filename(super().convert_field(field, conversion))
 
-    # Gauge
-    if kind == "ultra":
-        assert cost is not None
-        output.paste(ULTRA_BAR, mask=ULTRA_BAR)
-        text(
-            cost,
-            img=output,
-            font=GAUGE_FONT,
-            topleft=SPECIAL_XY.GAUGE_TOPLEFT,
-            fill=GAUGE_COST_COLOR,
-        )
-    elif kind == "normal":
-        normal_bar = ASSET_IMG(f"normal-{name.lower()}.png")
-        output.paste(normal_bar, mask=normal_bar)
-    elif kind == "special":
-        output.paste(SPECIAL_BAR, mask=SPECIAL_BAR)
-        if portrait:
-            portrait = ImageOps.fit(portrait, SPECIAL_XY.PORTRAIT_SIZE)
-            output.paste(portrait, box=(0, 0), mask=PORTRAIT_MASK)
 
-    if kind != "normal":
-        # Name shadow
-        text(
-            name,
-            img=output,
-            font=TITLE_FONT,
-            topleft=(SPECIAL_XY.NAME_TOPLEFT[0] - 2, SPECIAL_XY.NAME_TOPLEFT[1] + 2),
-            fill="black",
-        )
-        # Name
-        text(
-            name,
-            img=output,
-            font=TITLE_FONT,
-            topleft=SPECIAL_XY.NAME_TOPLEFT,
-            fill="white",
-        )
-
-    # Description
-    rich_text(
-        description,
-        align=True,
-        img=output,
-        family=TEXT_FONT_FAMILY,
-        topleft=SPECIAL_XY.DESCRIPTION_TOPLEFT,
-        max_width=DESCRIPTION_WIDTH,
-    )
-
-    # Range
-    centered_text(
-        range,
-        img=output,
-        font=TITLE_FONT,
-        topleft=SPECIAL_XY.RANGE_TOPLEFT,
-        max_width=60,
-        fill="white",
-        stroke_width=STAT_STROKE_WIDTH,
-        stroke_fill=RANGE_STROKE,
-    )
-    # Power
-    text(
-        power,
-        img=output,
-        font=TITLE_FONT,
-        topleft=SPECIAL_XY.POWER_TOPLEFT,
-        fill="white",
-        stroke_width=STAT_STROKE_WIDTH,
-        stroke_fill=POWER_STROKE,
-    )
-    # Speed
-    text(
-        speed,
-        img=output,
-        font=TITLE_FONT,
-        topleft=SPECIAL_XY.SPEED_TOPLEFT,
-        fill="white",
-        stroke_width=STAT_STROKE_WIDTH,
-        stroke_fill=SPEED_STROKE,
-    )
-
-    # Armor
-    if armor:
-        output.paste(ARMOR_BAR, mask=ARMOR_BAR)
-        text(
-            armor,
-            img=output,
-            font=TITLE_FONT,
-            topleft=SPECIAL_XY.ARMOR_TOPLEFT,
-            fill="white",
-            stroke_width=STAT_STROKE_WIDTH,
-            stroke_fill=ARMOR_STROKE,
-        )
-    # Guard
-    if guard:
-        output.paste(GUARD_BAR, mask=GUARD_BAR)
-        text(
-            guard,
-            img=output,
-            font=TITLE_FONT,
-            topleft=SPECIAL_XY.GUARD_TOPLEFT,
-            fill="white",
-            stroke_width=STAT_STROKE_WIDTH,
-            stroke_fill=GUARD_STROKE,
-        )
-
-    if boost_type == "instant":
-        boost_name_color = INSTANT_BOOST_NAME_COLOR
-        boost_image = INSTANT_BOOST
-        boost_cancel_image = INSTANT_BOOST_CANCEL
-    else:
-        boost_name_color = CONTINUOUS_BOOST_NAME_COLOR
-        boost_image = CONTINUOUS_BOOST
-        boost_cancel_image = CONTINUOUS_BOOST_CANCEL
-
-    output.paste(boost_image, mask=boost_image)
-    if cancel:
-        output.paste(boost_cancel_image, mask=boost_cancel_image)
-
-    # Boost name
-    text(
-        boost_name,
-        img=output,
-        font=TEXT_FONT_BOLD,
-        topleft=SPECIAL_XY.BOOST_NAME_TOPLEFT,
-        fill=boost_name_color,
-    )
-    # Boost description
-    rich_text(
-        boost,
-        img=output,
-        family=TEXT_FONT_FAMILY,
-        topleft=SPECIAL_XY.BOOST_DESCRIPTION_TOPLEFT,
-        max_width=DESCRIPTION_WIDTH,
-    )
-
-    return output
+def interpret_expression(expr, row: dict[str, str]):
+    if isinstance(expr, dict) and "match" in expr:
+        value = row[expr["match"]]
+        for pattern, sub_expr in expr.items():
+            if pattern == "match":
+                continue
+            if re.match(pattern, value):
+                return interpret_expression(sub_expr, row)
+    elif isinstance(expr, str):
+        return FilenameFormatter().format(expr, **row)
+    return expr
 
 
 def text(
@@ -518,6 +493,12 @@ def main():
         "folder", help="folder containing a CSV file and character images", type=Path
     )
     p.add_argument(
+        "--season",
+        help="the season yaml to use",
+        type=Path,
+        required=True,
+    )
+    p.add_argument(
         "--no-duplicates",
         help="only put one copy of each card in the grid",
         action="store_true",
@@ -555,6 +536,7 @@ def size_2d(s: str) -> tuple[int, int]:
 
 def csv_to_cards(
     folder: Path,
+    season: Path,
     no_duplicates: bool,
     no_normals: bool,
     back: Image.Image,
@@ -568,6 +550,8 @@ def csv_to_cards(
     if not (csv := next(folder.glob("*.csv"), None)):
         print(f"No CSV file found in {folder}")
         return
+
+    season_data = load_season(season)
 
     print(f"Using CSV file: {csv}")
 
@@ -619,12 +603,10 @@ def csv_to_cards(
 
         match row["kind"]:
             case "special" | "ultra" | "normal":
-                func = make_move_card
                 row["portrait"] = portrait
-                fname = valid_filename(row["name"])
+                fname = Path(valid_filename(row["name"]) + ".png")
                 default_copies = 2
             case "innate" | "exceed" as kind:
-                func = make_character_card
                 fname = f"{kind}.png"
                 default_copies = 1
             case "" | None:
@@ -633,18 +615,9 @@ def csv_to_cards(
                 print(f"Ignoring card with unknown kind: {row['kind']}")
                 continue
 
-        sig = signature(func)
-        for key, cell in row.copy().items():
-            if key not in sig.parameters:
-                if cell:
-                    print(f"Ignoring unknown column: {key}")
-                del row[key]
-        for key in sig.parameters:
-            if key not in row:
-                row[key] = None
-
+        row.setdefault("owner", character)
         row["image"] = open_image(folder / fname)
-        card = func(**row)
+        card = interpret(season_data, row)
         card.save(output / fname)
         copies = 1 if no_duplicates else int(row.get("copies") or default_copies)
         cards[row["kind"]].extend(copies * [card])
@@ -668,18 +641,17 @@ def csv_to_cards(
     g_ref.save(output / f"{character}-ref.jpg", quality=75, subsampling=0)
 
 
-def valid_filename(name: str) -> Path:
+def valid_filename(name: str) -> str:
     valid_fname = ascii_letters + digits + "_-"
-    return Path(
-        "".join(filter(lambda c: c in valid_fname, name.replace(" ", "_"))) + ".png"
-    )
+    return "".join(filter(lambda c: c in valid_fname, name.replace(" ", "_")))
 
 
 def calculate_grid(n: int, w: int, min_h: int) -> tuple[int, int]:
     return (w, max(min_h, n // w + 1))
 
 
-def open_image(path: Path) -> Image.Image | None:
+def open_image(path: Path | str) -> Image.Image | None:
+    path = Path(path)
     if path.exists():
         return Image.open(path)
     print(f"Image not found: {path}")

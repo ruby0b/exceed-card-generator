@@ -1,0 +1,125 @@
+fonts:
+  title:
+    file: assets/Impact-Strive.otf
+    size: 40
+  gauge:
+    file: assets/Impact-Strive.otf
+    size: 66
+  text:
+    file: assets/Montserrat-VariableFont_wght.ttf
+    size: 30
+    variations:
+      regular: Regular
+      bold: Bold
+      italic: Italic
+layers:
+  - match: kind
+    innate|exceed:
+      - image: assets/{kind}-bg.png
+        mask: false
+      - image: input/{owner}/{kind}.png
+        fit: [750, 1024]
+      - image: assets/{kind}-base.png
+      - text: cost
+        xy: [598, 732]
+        font: gauge
+        fill: "#00adef"
+      - text: name
+        xy: [65, 725]
+        font: title
+        fill: white
+      - text: description
+        rich: true
+        xy: [96, 865]
+        font: text
+        width: 570
+        fill: white
+    normal|special|ultra:
+      - image: input/{owner}/{name}.png
+        xy: [85, 100]
+        fit: [665, 570]
+        mask: false
+      - image: assets/special-base.png
+      - match: kind
+        ultra:
+          - image: assets/special-ultra.png
+          - text: cost
+            xy: [62, 30]
+            font: gauge
+            fill: "#00adef"
+        normal:
+          - image: assets/normal-{name}.png
+        special:
+          - image: assets/special-special.png
+          - image: input/{owner}/portrait.jpg
+            fit: [150, 150]
+            mask: assets/mask-portrait.png
+      - match: kind
+        (?!normal):
+          - text: name
+            xy: [198, 43]
+            font: title
+            fill: white
+            shadow:
+              offset: [-2, +2]
+              fill: black
+      - text: description
+        rich: true
+        xy: [96, 680]
+        font: text
+        width: 570
+        align: true
+        fill: white
+      - text: range
+        centered: true
+        xy: [49, 222]
+        width: 60
+        font: title
+        fill: white
+        stroke_width: 2
+        stroke_fill: "#374fa2"
+      - text: power
+        xy: [49, 312]
+        font: title
+        fill: white
+        stroke_width: 2
+        stroke_fill: "#6a1f1f"
+      - text: speed
+        xy: [49, 402]
+        font: title
+        fill: white
+        stroke_width: 2
+        stroke_fill: "#7c531f"
+      - match: armor
+        .+:
+          - image: assets/special-armor.png
+          - text: armor
+            xy: [49, 492]
+            font: title
+            fill: white
+            stroke_width: 2
+            stroke_fill: "#581f59"
+      - match: guard
+        .+:
+          - image: assets/special-guard.png
+          - text: guard
+            xy: [49, 584]
+            font: title
+            fill: white
+            stroke_width: 2
+            stroke_fill: "#2d5529"
+      - image: assets/special-{boost_type}.png
+      - image: assets/special-{boost_type}-cancel.png
+      - text: boost_name
+        xy: [67, 840]
+        font: text
+        fill:
+          match: boost_type
+          instant: "#d989b5"
+          continuous: "#ffa864"
+      - text: boost
+        rich: true
+        xy: [96, 875]
+        font: text
+        width: 570
+        fill: white

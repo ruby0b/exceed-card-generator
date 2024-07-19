@@ -10,7 +10,7 @@
         (system: function nixpkgs.legacyPackages.${system});
       binFor = pkgs: pkgs.writers.writePython3Bin
         "exceed-card-generator"
-        { libraries = with pkgs.python3.pkgs; [ pillow ]; }
+        { libraries = with pkgs.python3.pkgs; [ pillow strictyaml ]; }
         ("__import__('os').environ.setdefault('ASSETS', '${./assets}')\n"
           + builtins.readFile ./main.py);
     in
@@ -29,6 +29,7 @@
           packages = [
             (pkgs.python3.withPackages (ps: with ps; [
               pillow
+              strictyaml
             ]))
           ];
         };
