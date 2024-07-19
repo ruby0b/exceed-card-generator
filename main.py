@@ -271,20 +271,28 @@ def interpret_layer(
 ):
     if "text" in layer:
         data = interpret_all_expressions(layer, row)
-        text(
-            row[data["text"]],
+        text_kwargs = dict(
+            text=row[data["text"]],
             img=img,
             font=fonts[data["font"]],
             topleft=data["xy"],
             fill=data["fill"],
             # width=data.get("width"),
-            # shadow=data.get("shadow"),
             # rich=data.get("rich"),
             # align=data.get("align"),
             # centered=data.get("centered"),
             stroke_width=data.get("stroke_width", 0),
             stroke_fill=data.get("stroke_fill"),
         )
+        if data.get("shadow"):
+            shadow_kwargs = text_kwargs.copy()
+            shadow_kwargs["fill"] = data["shadow"]["fill"]
+            shadow_kwargs["topleft"] = (
+                shadow_kwargs["topleft"][0] + data["shadow"]["offset"][0],
+                shadow_kwargs["topleft"][1] + data["shadow"]["offset"][1],
+            )
+            text(**shadow_kwargs)
+        text(**text_kwargs)
 
     elif "image" in layer:
         data = interpret_all_expressions(layer, row)
