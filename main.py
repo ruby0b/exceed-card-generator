@@ -198,6 +198,7 @@ class Schema:
     )
     schema = Map(
         {
+            Optional("normals"): Seq(MapPattern(Str(), Any())),
             "fonts": MapPattern(
                 Str(),
                 Map(
@@ -589,7 +590,7 @@ def csv_to_cards(
         "Normal": [],
     }
 
-    data.extend(NORMALS_DATA)
+    data.extend(season_data.get("normals", []))
 
     for row in data:
         for key, cell in row.items():
