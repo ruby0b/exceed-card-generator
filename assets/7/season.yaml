@@ -125,38 +125,38 @@ normals:
 fonts:
   title:
     regular:
-      file: assets/s7/fonts/Impact-Strive.otf
+      file: assets/7/fonts/Impact-Strive.otf
       size: 40
   character_name:
     regular:
-      file: assets/s7/fonts/Impact-Strive.otf
+      file: assets/7/fonts/Impact-Strive.otf
       size: 56
   gauge:
     regular:
-      file: assets/s7/fonts/Impact-Strive.otf
+      file: assets/7/fonts/Impact-Strive.otf
       size: 66
   text:
     regular:
-      file: assets/s7/fonts/Montserrat-VariableFont_wght.ttf
+      file: assets/7/fonts/Montserrat-VariableFont_wght.ttf
       size: 30
       variation: Regular
     bold:
-      file: assets/s7/fonts/Montserrat-VariableFont_wght.ttf
+      file: assets/7/fonts/Montserrat-VariableFont_wght.ttf
       size: 30
       variation: Bold
     italic:
-      file: assets/s7/fonts/Montserrat-Italic-VariableFont_wght.ttf
+      file: assets/7/fonts/Montserrat-Italic-VariableFont_wght.ttf
       size: 30
       variation: Italic
 
 layers:
   - match: kind
     Innate|Exceed:
-      - image: assets/s7/{kind}-bg.png
+      - image: assets/7/{kind}-bg.png
         mask: false
       - image: input/{owner}/{kind}.png
         fit: [750, 1024]
-      - image: assets/s7/{kind}-base.png
+      - image: assets/7/{kind}-base.png
       - text: cost
         xy: [598, 732]
         font: gauge
@@ -174,21 +174,21 @@ layers:
         xy: [85, 100]
         fit: [665, 570]
         mask: false
-      - image: assets/s7/special-base.png
+      - image: assets/7/special-base.png
       - match: kind
         Ultra:
-          - image: assets/s7/special-ultra.png
+          - image: assets/7/special-ultra.png
           - text: cost
             xy: [62, 30]
             font: gauge
             fill: "#00adef"
         Normal:
-          - image: assets/s7/normal-{name}.png
+          - image: assets/7/normal-{name}.png
         Special:
-          - image: assets/s7/special-special.png
+          - image: assets/7/special-special.png
           - image: input/{owner}/portrait.jpg
             fit: [150, 150]
-            mask: assets/s7/mask-portrait.png
+            mask: assets/7/mask-portrait.png
       - match: kind
         (?!Normal):
           - text: name
@@ -225,7 +225,7 @@ layers:
         stroke_fill: "#7c531f"
       - match: armor
         .+:
-          - image: assets/s7/special-armor.png
+          - image: assets/7/special-armor.png
           - text: armor
             xy: [60, 492]
             anchor: ma
@@ -235,7 +235,7 @@ layers:
             stroke_fill: "#581f59"
       - match: guard
         .+:
-          - image: assets/s7/special-guard.png
+          - image: assets/7/special-guard.png
           - text: guard
             xy: [60, 584]
             anchor: ma
@@ -243,8 +243,8 @@ layers:
             fill: white
             stroke_width: 2
             stroke_fill: "#2d5529"
-      - image: assets/s7/special-{boost_type}.png
-      - image: assets/s7/special-{boost_type}-cancel.png
+      - image: assets/7/special-{boost_type}.png
+      - image: assets/7/special-{boost_type}-cancel.png
       - text: boost_name
         xy: [67, 840]
         font: text

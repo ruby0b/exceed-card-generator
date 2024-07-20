@@ -65,7 +65,7 @@ ITALIC = [ItalicChunk(True)]
 NO_ITALIC = [ItalicChunk(False)]
 COLOR = lambda c: [ColorChunk(c)]
 NO_COLOR = [ColorChunk("white")]
-ICON = lambda icon: [TextChunk(" "), IconChunk(ASSET_IMG(f"s7/icons/{icon}.png"))]
+ICON = lambda icon: [TextChunk(" "), IconChunk(ASSET_IMG(f"7/icons/{icon}.png"))]
 NUM = r"\d+(?:-\d+)?"
 AMOUNT = rf"(?:[+-]?{NUM} )?"
 KEYWORDS = [
@@ -511,7 +511,7 @@ def main():
     )
     p.add_argument(
         "--season",
-        help="the season yaml to use",
+        help=f"the season to use (available: {', '.join(d.name for d in ASSETS.glob('*'))})",
         type=Path,
         required=True,
     )
@@ -529,7 +529,7 @@ def main():
         "--back",
         help="the image to use for the card backs",
         type=Image.open,
-        default=ASSET_IMG("s7/card-back.jpeg"),
+        default=ASSET_IMG("7/card-back.jpeg"),
     )
     p.add_argument(
         "--grid",
@@ -568,7 +568,7 @@ def csv_to_cards(
         print(f"No CSV file found in {folder}")
         return
 
-    season_data = load_season(season)
+    season_data = load_season(ASSETS / season / "season.yaml")
 
     print(f"Using CSV file: {csv}")
 
