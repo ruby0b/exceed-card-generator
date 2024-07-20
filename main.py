@@ -54,34 +54,10 @@ BoldChunk = namedtuple("BoldChunk", ["bold"])  # begin/end bold
 IconChunk = namedtuple("IconChunk", ["icon"])  # insert icon
 Chunk = TextChunk | ColorChunk | ItalicChunk | BoldChunk | IconChunk
 
-# Images
 ASSETS = Path("assets" if Path("assets").is_dir() else os.environ["ASSETS"])
 ASSET_IMG = lambda path: Image.open(ASSETS / path)
 ASSET_JSON = lambda path: json.loads((ASSETS / path).read_text())
-
-# Data
 NORMALS_DATA = ASSET_JSON("normals.json")
-
-# Sizes
-TEXT_FONT_SIZE = 30
-TEXT_LINE_HEIGHT = 34
-STAT_STROKE_WIDTH = 2
-DESCRIPTION_WIDTH = 570
-
-# Fonts
-GGST_FONT_FILE = ASSETS / "Impact-Strive.otf"
-TEXT_FONT_FILE = ASSETS / "Montserrat-VariableFont_wght.ttf"
-TEXT_FONT_ITALIC_FILE = ASSETS / "Montserrat-Italic-VariableFont_wght.ttf"
-TEXT_FONT = ImageFont.truetype(TEXT_FONT_FILE, size=TEXT_FONT_SIZE)
-TEXT_FONT.set_variation_by_name("Regular")
-TEXT_FONT_BOLD = ImageFont.truetype(TEXT_FONT_FILE, size=TEXT_FONT_SIZE)
-TEXT_FONT_BOLD.set_variation_by_name("Bold")
-TEXT_FONT_ITALIC = ImageFont.truetype(TEXT_FONT_ITALIC_FILE, size=TEXT_FONT_SIZE)
-TEXT_FONT_ITALIC.set_variation_by_name("Italic")
-TEXT_FONT_FAMILY = FontFamily(TEXT_FONT, TEXT_FONT_BOLD, TEXT_FONT_ITALIC)
-TITLE_FONT = ImageFont.truetype(GGST_FONT_FILE, size=40)
-GAUGE_FONT = ImageFont.truetype(GGST_FONT_FILE, size=66)
-CHARACTER_NAME_FONT = ImageFont.truetype(GGST_FONT_FILE, size=56)
 
 # Keyword eDSL
 BOLD = [BoldChunk(True)]
@@ -413,6 +389,7 @@ def rich_text(
     img: Image,
     family: FontFamily,
     xy: tuple[int, int],
+    spacing: int = 4,
     fill: str,
     stroke_width: int | None = None,
     **text_kwargs,
@@ -422,10 +399,17 @@ def rich_text(
     lines = text.split("\n")
     xy = list(xy)
 
-    if 0 < len(lines) < 3:
-        lines = [" "] + lines + [" "]
-    if len(lines) == 3:
-        xy[1] += TEXT_LINE_HEIGHT / 2  # todo: use ImageDraw._multiline_spacing
+    line_height = (
+        draw.textbbox((0, 0), "A", family.regular, stroke_width=stroke_width)[3]
+        + stroke_width
+        + spacing
+    )
+
+    max_lines = 4
+    pad_lines = (max_lines - len(lines)) // 2
+    lines = pad_lines * [" "] + lines + pad_lines * [" "]
+    if len(lines) < max_lines:
+        xy[1] += line_height / 2
 
     bold = False
     italic = False
@@ -470,7 +454,7 @@ def rich_text(
             draw_text, draw_icon, chunks, family, bold, italic, fill
         )
 
-        xy[1] += TEXT_LINE_HEIGHT
+        xy[1] += line_height
 
 
 def rich_text_chunks(line: str) -> list[Chunk]:
