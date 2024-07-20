@@ -57,7 +57,6 @@ Chunk = TextChunk | ColorChunk | ItalicChunk | BoldChunk | IconChunk
 ASSETS = Path("assets" if Path("assets").is_dir() else os.environ["ASSETS"])
 ASSET_IMG = lambda path: Image.open(ASSETS / path)
 ASSET_JSON = lambda path: json.loads((ASSETS / path).read_text())
-NORMALS_DATA = ASSET_JSON("normals.json")
 
 # Keyword eDSL
 BOLD = [BoldChunk(True)]
@@ -66,7 +65,7 @@ ITALIC = [ItalicChunk(True)]
 NO_ITALIC = [ItalicChunk(False)]
 COLOR = lambda c: [ColorChunk(c)]
 NO_COLOR = [ColorChunk("white")]
-ICON = lambda icon: [TextChunk(" "), IconChunk(ASSET_IMG(f"icon-{icon}.png"))]
+ICON = lambda icon: [TextChunk(" "), IconChunk(ASSET_IMG(f"s7/icons/{icon}.png"))]
 NUM = r"\d+(?:-\d+)?"
 AMOUNT = rf"(?:[+-]?{NUM} )?"
 KEYWORDS = [
@@ -530,7 +529,7 @@ def main():
         "--back",
         help="the image to use for the card backs",
         type=Image.open,
-        default=ASSET_IMG("card-back.jpeg"),
+        default=ASSET_IMG("s7/card-back.jpeg"),
     )
     p.add_argument(
         "--grid",
