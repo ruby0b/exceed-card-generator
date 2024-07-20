@@ -14,7 +14,6 @@
 # You can receive a copy of the GNU General Public License at <http://www.gnu.org/licenses/>.
 
 import copy
-import json
 import os
 import re
 import string
@@ -47,65 +46,63 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 # Types
 FontFamily = namedtuple("FontFamily", ["regular", "bold", "italic"])
 Keyword = namedtuple("Keyword", ["pattern", "begin", "end"])
-TextChunk = namedtuple("TextChunk", ["text"])  # text with the current formatting
-ColorChunk = namedtuple("ColorChunk", ["color"])  # override current color
-ItalicChunk = namedtuple("ItalicChunk", ["italic"])  # begin/end italic
-BoldChunk = namedtuple("BoldChunk", ["bold"])  # begin/end bold
-IconChunk = namedtuple("IconChunk", ["icon"])  # insert icon
-Chunk = TextChunk | ColorChunk | ItalicChunk | BoldChunk | IconChunk
+TextChunk = namedtuple("TextChunk", ["text"])
+KwargsChunk = namedtuple("ColorChunk", ["kwargs"])
+Chunk = TextChunk | KwargsChunk
 
 ASSETS = Path("assets" if Path("assets").is_dir() else os.environ["ASSETS"])
 ASSET_IMG = lambda path: Image.open(ASSETS / path)
-ASSET_JSON = lambda path: json.loads((ASSETS / path).read_text())
-
-# Keyword eDSL
-BOLD = [BoldChunk(True)]
-NO_BOLD = [BoldChunk(False)]
-ITALIC = [ItalicChunk(True)]
-NO_ITALIC = [ItalicChunk(False)]
-COLOR = lambda c: [ColorChunk(c)]
-NO_COLOR = [ColorChunk("white")]
-ICON = lambda icon: [TextChunk(" "), IconChunk(ASSET_IMG(f"7/icons/{icon}.png"))]
+ICON = lambda icon: ASSET_IMG(f"7/icons/{icon}.png")
 NUM = r"\d+(?:-\d+)?"
 AMOUNT = rf"(?:[+-]?{NUM} )?"
 KEYWORDS = [
     Keyword(
-        rf"{AMOUNT}Range", BOLD + COLOR("#3ba7e1"), NO_BOLD + NO_COLOR + ICON("range")
+        rf"{AMOUNT}Range",
+        dict(fill="#3ba7e1", bold=True),
+        dict(fill="white", bold=False, icon=ICON("range")),
     ),
     Keyword(
-        rf"{AMOUNT}Power", BOLD + COLOR("#ec2d28"), NO_BOLD + NO_COLOR + ICON("power")
+        rf"{AMOUNT}Power",
+        dict(fill="#ec2d28", bold=True),
+        dict(fill="white", bold=False, icon=ICON("power")),
     ),
     Keyword(
-        rf"{AMOUNT}Speed", BOLD + COLOR("#fbf008"), NO_BOLD + NO_COLOR + ICON("speed")
+        rf"{AMOUNT}Speed",
+        dict(fill="#fbf008", bold=True),
+        dict(fill="white", bold=False, icon=ICON("speed")),
     ),
     Keyword(
-        rf"{AMOUNT}Armor", BOLD + COLOR("#bc5da2"), NO_BOLD + NO_COLOR + ICON("armor")
+        rf"{AMOUNT}Armor",
+        dict(fill="#bc5da2", bold=True),
+        dict(fill="white", bold=False, icon=ICON("armor")),
     ),
     Keyword(
-        rf"{AMOUNT}Guard", BOLD + COLOR("#62b944"), NO_BOLD + NO_COLOR + ICON("guard")
+        rf"{AMOUNT}Guard",
+        dict(fill="#62b944", bold=True),
+        dict(fill="white", bold=False, icon=ICON("guard")),
     ),
     Keyword(
         r"Continuous Boost",
-        BOLD + COLOR("orange"),
-        NO_BOLD + NO_COLOR + ICON("continuous"),
+        dict(fill="orange", bold=True),
+        dict(fill="white", bold=False, icon=ICON("continuous")),
     ),
-    Keyword(rf"{AMOUNT}Force", [], [ICON("force")]),
-    Keyword(r"BEFORE:", BOLD, NO_BOLD),
-    Keyword(rf"HIT(?:, RANGE {NUM})?:", BOLD, NO_BOLD),
-    Keyword(r"AFTER:", BOLD, NO_BOLD),
-    Keyword(r"NOW:", BOLD, NO_BOLD),
-    Keyword(r"Advantage", BOLD, NO_BOLD),
-    Keyword(r"Ignore Armor\.", BOLD, NO_BOLD),
-    Keyword(r"Ignore Guard\.", BOLD, NO_BOLD),
-    Keyword(r"Stun Immunity\.", BOLD, NO_BOLD),
-    Keyword(r"You cannot be Pushed or Pulled\.", BOLD, NO_BOLD),
-    Keyword(r"If the opponent initiated,", BOLD, NO_BOLD),
-    Keyword(r"If you initiated,", BOLD, NO_BOLD),
-    Keyword(r"Your attack is EX", BOLD, NO_BOLD),
-    Keyword(r"“", ITALIC, []),
-    Keyword(r"”", [], NO_ITALIC),
-    Keyword(r"\(", ITALIC, []),
-    Keyword(r"\)", [], NO_ITALIC),
+    Keyword(rf"{AMOUNT}Force", dict(), dict(icon=ICON("force"))),
+    Keyword(r"BEFORE:", dict(bold=True), dict(bold=False)),
+    Keyword(rf"HIT(?:, RANGE {NUM})?:", dict(bold=True), dict(bold=False)),
+    Keyword(r"AFTER:", dict(bold=True), dict(bold=False)),
+    Keyword(r"NOW:", dict(bold=True), dict(bold=False)),
+    Keyword(r"Advantage", dict(bold=True), dict(bold=False)),
+    Keyword(r"Ignore Armor\.", dict(bold=True), dict(bold=False)),
+    Keyword(r"Ignore Guard\.", dict(bold=True), dict(bold=False)),
+    Keyword(r"Stun Immunity\.", dict(bold=True), dict(bold=False)),
+    Keyword(r"You cannot be Pushed or Pulled\.", dict(bold=True), dict(bold=False)),
+    Keyword(r"If the opponent initiated,", dict(bold=True), dict(bold=False)),
+    Keyword(r"If you initiated,", dict(bold=True), dict(bold=False)),
+    Keyword(r"Your attack is EX", dict(bold=True), dict(bold=False)),
+    Keyword(r"“", dict(italic=True), dict()),
+    Keyword(r"”", dict(), dict(italic=False)),
+    Keyword(r"\(", dict(italic=True), dict()),
+    Keyword(r"\)", dict(), dict(italic=False)),
 ]
 
 
@@ -390,7 +387,6 @@ def rich_text(
     family: FontFamily,
     xy: tuple[int, int],
     spacing: int = 4,
-    fill: str,
     stroke_width: int | None = None,
     **text_kwargs,
 ):
@@ -420,13 +416,13 @@ def rich_text(
         chunk_to_width = defaultdict(lambda: 0)
 
         def text_width(i, text, font, *_):
-            kwargs = dict(font=font, stroke_width=stroke_width)
+            kwargs = {"font": font, "stroke_width": stroke_width}
             chunk_to_width[i] = draw.textbbox((0, 0), text, **kwargs)[2]
 
         def icon_width(i, icon):
             chunk_to_width[i] = icon.size[0]
 
-        fold_chunks(text_width, icon_width, chunks, family, bold, italic, fill)
+        fold_chunks(text_width, icon_width, chunks, family, bold, italic, text_kwargs)
 
         cum_widths = [chunk_to_width[0]]
         for i in range(len(chunks))[1:]:
@@ -443,17 +439,19 @@ def rich_text(
                 x += cum_widths[i - 1]
             return x, xy[1]
 
-        def draw_text(i, text, font, bold, italic, color):
-            draw.text(get_xy(i), text, **{**text_kwargs, "font": font, "fill": color})
+        def draw_text(i, text, font, kwargs):
+            kwargs = kwargs.copy()
+            kwargs.pop("bold", None)
+            kwargs.pop("italic", None)
+            draw.text(get_xy(i), text, **{**kwargs, "font": font})
 
         def draw_icon(i, icon):
             x, y = get_xy(i)
             img.paste(icon, (int(x), int(y) + 8), mask=icon)
 
         bold, italic, color = fold_chunks(
-            draw_text, draw_icon, chunks, family, bold, italic, fill
+            draw_text, draw_icon, chunks, family, bold, italic, text_kwargs
         )
-
         xy[1] += line_height
 
 
@@ -464,9 +462,11 @@ def rich_text_chunks(line: str) -> list[Chunk]:
         keyword = next(w for i, w in enumerate(KEYWORDS) if m.group(i + 1))
         if i < m.start():
             chunks.append(TextChunk(line[i : m.start()]))
-        chunks.extend(keyword.begin)
+        chunks.append(KwargsChunk(keyword.begin))
         chunks.append(TextChunk(m.group()))
-        chunks.extend(keyword.end)
+        if keyword.end.get("icon"):
+            chunks.append(TextChunk(" "))
+        chunks.append(KwargsChunk(keyword.end))
         i = m.end()
     if i < len(line):
         chunks.append(TextChunk(line[i:]))
@@ -474,34 +474,29 @@ def rich_text_chunks(line: str) -> list[Chunk]:
 
 
 def fold_chunks(
-    f: Callable,
+    f_text: Callable,
     f_icon: Callable,
     line_chunks: list[Chunk],
     family: FontFamily,
     bold: bool,
     italic: bool,
-    color: str,
-) -> tuple[bool, bool, str]:
+    kwargs: dict,
+) -> tuple[bool, bool, dict]:
     for i, chunk in enumerate(line_chunks):
         match chunk:
             case TextChunk(text):
                 font = (
-                    (bold and family.bold)
-                    or (italic and family.italic)
+                    (kwargs.get("bold") and family.bold)
+                    or (kwargs.get("italic") and family.italic)
                     or family.regular
                 )
-                f(i, text, font, bold, italic, color)
-            case BoldChunk(bold_now):
-                bold = bold_now
-            case ItalicChunk(italic_now):
-                italic = italic_now
-            case ColorChunk(color_now):
-                color = color_now
-            case IconChunk(icon):
-                f_icon(i, icon)
-            case _:
-                pass
-    return bold, italic, color
+                f_text(i, text, font, kwargs)
+            case KwargsChunk(kwargs_now):
+                kwargs_now = kwargs_now.copy()
+                if icon := kwargs_now.pop("icon", None):
+                    f_icon(i, icon)
+                kwargs |= kwargs_now
+    return bold, italic, kwargs
 
 
 def main():
