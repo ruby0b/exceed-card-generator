@@ -40,11 +40,9 @@ layers:
         xy: [65, 725]
         font: character_name
         fill: white
-      - text: description
-        rich: true
-        xy: [96, 865]
+      - rich text: description
+        xy: [375, 865]
         font: text
-        width: 570
         fill: white
     Normal|Special|Ultra:
       - image: input/{owner}/{name}.png
@@ -75,11 +73,9 @@ layers:
             shadow:
               offset: [-2, +2]
               fill: black
-      - text: description
-        rich: true
-        xy: [96, 680]
+      - rich text: description
+        xy: [375, 680]
         font: text
-        width: 570
         fill: white
       - text: range
         xy: [75, 222]
@@ -131,9 +127,7 @@ layers:
           match: boost_type
           Instant: "#d989b5"
           Continuous: "#ffa864"
-      - text: boost
-        rich: true
-        xy: [96, 875]
+      - rich text: boost
+        xy: [375, 875]
         font: text
-        width: 570
         fill: white

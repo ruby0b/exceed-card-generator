@@ -165,6 +165,21 @@ class Schema:
     color = Str()
     font = Str()
     xy = FixedSeq([Int(), Int()])
+    rich_text = MapCombined({"rich text": Str()}, Str(), Any()).and_then(
+        Map(
+            {
+                "rich text": expr(Str()),
+                "xy": expr(xy),
+                "font": expr(font),
+                "fill": expr(color),
+                Optional("shadow"): expr(
+                    Map({"offset": expr(xy), "fill": expr(color)})
+                ),
+                Optional("stroke_width"): expr(Int()),
+                Optional("stroke_fill"): expr(color),
+            }
+        )
+    )
     text = MapCombined({"text": Str()}, Str(), Any()).and_then(
         Map(
             {
@@ -172,11 +187,9 @@ class Schema:
                 "xy": expr(xy),
                 "font": expr(font),
                 "fill": expr(color),
-                Optional("width"): expr(Int()),
                 Optional("shadow"): expr(
                     Map({"offset": expr(xy), "fill": expr(color)})
                 ),
-                Optional("rich"): expr(Bool()),
                 Optional("anchor"): expr(Str()),
                 Optional("stroke_width"): expr(Int()),
                 Optional("stroke_fill"): expr(color),
@@ -194,7 +207,11 @@ class Schema:
         )
     )
     match = MapCombined({"match": Str()}, Str(), Any())
-    layers = Seq(MapPattern(Str(), Any()).and_then(text.or_else(image.or_else(match))))
+    layers = Seq(
+        MapPattern(Str(), Any()).and_then(
+            rich_text.or_else(text.or_else(image.or_else(match)))
+        )
+    )
     match.on_success = MapCombined({"match": Str()}, Str(), layers)
     font = Map(
         {
@@ -280,33 +297,36 @@ def interpret_layer(
     row: dict[str, str],
     fonts: dict[str, FontFamily],
 ):
-    if "text" in layer:
+    if "rich text" in layer:
         data = interpret_all_expressions(layer, row)
-        text_kwargs = dict(
+        kwargs = dict(
+            text=row[data["rich text"]],
+            img=img,
+            family=fonts[data["font"]],
+            xy=data["xy"],
+            fill=data["fill"],
+            stroke_width=data.get("stroke_width", 0),
+            stroke_fill=data.get("stroke_fill"),
+        )
+        if data.get("shadow"):
+            shadow_text(rich_text, **(kwargs | data["shadow"]))
+        rich_text(**kwargs)
+
+    elif "text" in layer:
+        data = interpret_all_expressions(layer, row)
+        kwargs = dict(
             text=row[data["text"]],
             img=img,
             font=fonts[data["font"]].regular,
-            topleft=data["xy"],
+            xy=data["xy"],
             fill=data["fill"],
             anchor=data.get("anchor", "la"),
             stroke_width=data.get("stroke_width", 0),
             stroke_fill=data.get("stroke_fill"),
         )
-        if data.get("rich"):
-            func = rich_text
-            text_kwargs["family"] = fonts[data["font"]]
-            text_kwargs["max_width"] = data["width"]
-        else:
-            func = text
         if data.get("shadow"):
-            shadow_kwargs = text_kwargs.copy()
-            shadow_kwargs["fill"] = data["shadow"]["fill"]
-            shadow_kwargs["topleft"] = (
-                shadow_kwargs["topleft"][0] + data["shadow"]["offset"][0],
-                shadow_kwargs["topleft"][1] + data["shadow"]["offset"][1],
-            )
-            func(**shadow_kwargs)
-        func(**text_kwargs)
+            shadow_text(text, **(kwargs | data["shadow"]))
+        text(**kwargs)
 
     elif "image" in layer:
         data = interpret_all_expressions(layer, row)
@@ -359,15 +379,31 @@ def interpret_expression(expr, row: dict[str, str]):
     return expr
 
 
+def shadow_text(
+    text_func: Callable,
+    offset: tuple[int, int],
+    **text_kwargs,
+):
+    text_func(
+        **{
+            **text_kwargs,
+            "xy": (
+                text_kwargs["xy"][0] + offset[0],
+                text_kwargs["xy"][1] + offset[1],
+            ),
+        }
+    )
+
+
 def text(
     text: str,
     *,
     img: Image,
     font: ImageFont.ImageFont,
-    topleft: tuple[int, int],
+    xy: tuple[int, int],
     **text_kwargs,
 ):
-    ImageDraw.Draw(img).multiline_text(topleft, text, font=font, **text_kwargs)
+    ImageDraw.Draw(img).multiline_text(xy, text, font=font, **text_kwargs)
 
 
 # draw lines with horizontal centering and rich text formatting
@@ -376,57 +412,65 @@ def rich_text(
     *,
     img: Image,
     family: FontFamily,
-    topleft: tuple[int, int],
-    max_width: int,
+    xy: tuple[int, int],
+    fill: str,
+    stroke_width: int | None = None,
     **text_kwargs,
 ):
+    text_kwargs["stroke_width"] = stroke_width
     draw = ImageDraw.Draw(img)
     lines = text.split("\n")
-    topleft = list(topleft)
+    xy = list(xy)
 
     if 0 < len(lines) < 3:
         lines = [" "] + lines + [" "]
     if len(lines) == 3:
-        topleft[1] += TEXT_LINE_HEIGHT / 2
+        xy[1] += TEXT_LINE_HEIGHT / 2  # todo: use ImageDraw._multiline_spacing
 
     bold = False
     italic = False
-    color = "white"
+    line_chunks = []
+    line_cum_widths = []
     for line in lines:
         chunks = rich_text_chunks(line)
-
         chunk_to_width = defaultdict(lambda: 0)
 
         def text_width(i, text, font, *_):
-            chunk_to_width[i] = draw.textbbox((0, 0), text, font=font)[2]
+            kwargs = dict(font=font, stroke_width=stroke_width)
+            chunk_to_width[i] = draw.textbbox((0, 0), text, **kwargs)[2]
 
         def icon_width(i, icon):
             chunk_to_width[i] = icon.size[0]
 
-        fold_chunks(text_width, icon_width, chunks, family, bold, italic, color)
+        fold_chunks(text_width, icon_width, chunks, family, bold, italic, fill)
 
         cum_widths = [chunk_to_width[0]]
         for i in range(len(chunks))[1:]:
             cum_widths.append(cum_widths[-1] + chunk_to_width[i])
 
-        def xy(i):
-            x = topleft[0] + (max_width - cum_widths[-1]) / 2
+        line_chunks.append(chunks)
+        line_cum_widths.append(cum_widths)
+
+    for line, chunks, cum_widths in zip(lines, line_chunks, line_cum_widths):
+
+        def get_xy(i):
+            x = xy[0] - cum_widths[-1] / 2
             if i > 0:
                 x += cum_widths[i - 1]
-            return x, topleft[1]
+            return x, xy[1]
 
         def draw_text(i, text, font, bold, italic, color):
-            draw.text(xy(i), text, **{**text_kwargs, "font": font, "fill": color})
+            draw.text(get_xy(i), text, **{**text_kwargs, "font": font, "fill": color})
 
         def draw_icon(i, icon):
-            x, y = xy(i)
+            x, y = get_xy(i)
             img.paste(icon, (int(x), int(y) + 8), mask=icon)
 
         bold, italic, color = fold_chunks(
-            draw_text, draw_icon, chunks, family, bold, italic, color
+            draw_text, draw_icon, chunks, family, bold, italic, fill
         )
 
-        topleft[1] += TEXT_LINE_HEIGHT
+        xy[1] += TEXT_LINE_HEIGHT
 
 
 def rich_text_chunks(line: str) -> list[Chunk]:
