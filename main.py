@@ -129,6 +129,7 @@ def or_else(self, other):
 
 
 class Schema:
+    @staticmethod
     def expr(t):
         t = copy.deepcopy(t)
         t.on_failure = MapCombined({"match": Str()}, Str(), t)
@@ -240,12 +241,11 @@ def chain_revalidate(yaml: YAML, revalidator=None, errs: tuple[YAMLError, ...] =
         yaml.revalidate(revalidator)
     except YAMLError as e:
         if on_failure := getattr(revalidator, "on_failure", None):
-            chain_revalidate(yaml, revalidator=on_failure, errs=(*errs, e))
-        else:
-            if not errs:
-                raise e
-            err_msgs = ("Fix one of the following errors:", *errs, e)
-            raise YAMLError("\n\n".join(str(err) for err in err_msgs))
+            return chain_revalidate(yaml, revalidator=on_failure, errs=(*errs, e))
+        elif not errs:
+            raise e
+        err_msgs = ("Fix one of the following errors:", *errs, e)
+        raise YAMLError("\n\n".join(str(err) for err in err_msgs))
     chain_revalidate(yaml, errs=errs)
 
 
@@ -281,15 +281,13 @@ def interpret_layer(
             stroke_width=data.get("stroke_width", 0),
             stroke_fill=data.get("stroke_fill"),
         )
-        if data.get("shadow"):
-            shadow_text(rich_text, **(kwargs | data["shadow"]))
+        shadow_text(rich_text, kwargs, data.get("shadow"))
         rich_text(**kwargs)
 
     elif "text" in layer:
         data = interpret_all_expressions(layer, row)
         kwargs = dict(
             text=row[data["text"]],
-            img=img,
             font=fonts[data["font"]].regular,
             xy=data["xy"],
             fill=data["fill"],
@@ -297,9 +295,9 @@ def interpret_layer(
             stroke_width=data.get("stroke_width", 0),
             stroke_fill=data.get("stroke_fill"),
         )
-        if data.get("shadow"):
-            shadow_text(text, **(kwargs | data["shadow"]))
-        text(**kwargs)
+        text_func = ImageDraw.Draw(img).multiline_text
+        shadow_text(text_func, kwargs, data.get("shadow"))
+        text_func(**kwargs)
 
     elif "image" in layer:
         data = interpret_all_expressions(layer, row)
@@ -352,31 +350,10 @@ def interpret_expression(expr, row: dict[str, str]):
     return expr
 
 
-def shadow_text(
-    text_func: Callable,
-    offset: tuple[int, int],
-    **text_kwargs,
-):
-    text_func(
-        **{
-            **text_kwargs,
-            "xy": (
-                text_kwargs["xy"][0] + offset[0],
-                text_kwargs["xy"][1] + offset[1],
-            ),
-        }
-    )
-
-
-def text(
-    text: str,
-    *,
-    img: Image,
-    font: ImageFont.ImageFont,
-    xy: tuple[int, int],
-    **text_kwargs,
-):
-    ImageDraw.Draw(img).multiline_text(xy, text, font=font, **text_kwargs)
+def shadow_text(text_func: Callable, kwargs: dict, shadow: dict | None):
+    if shadow := copy.copy(shadow):
+        xy = tuple(map(sum, zip(kwargs["xy"], shadow.pop("offset"))))
+        text_func(**dict(kwargs, xy=xy, **shadow))
 
 
 # draw lines with horizontal centering and rich text formatting
