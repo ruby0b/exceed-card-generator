@@ -1,3 +1,127 @@
+normals:
+  - name: Grasp
+    kind: Normal
+    range: 1
+    power: 3
+    speed: 7
+    armor: 0
+    guard: 0
+    description: "HIT: Push or Pull 1 or 2."
+    boost_type: Continuous
+    boost: |-
+      NOW: Draw 1.
+      HIT: +1 Power. Add this to your Gauge.
+    boost_name: LET'S ROCK!
+  - name: Cross
+    kind: Normal
+    range: 1-2
+    power: 3
+    speed: 6
+    armor: 0
+    guard: 0
+    description: "AFTER: Retreat 3."
+    boost_type: Instant
+    cancel: true
+    boost: |-
+      Push or Pull 2; if the opponent was Pulled
+      past you, add this to your Gauge.
+    boost_name: AREA SHIFT
+  - name: Slash
+    kind: Normal
+    range: 1
+    power: 4
+    speed: 5
+    armor: 0
+    guard: 0
+    description: |-
+      BEFORE: Close 2.
+      HIT: Gain Advantage (you take the next
+      turn, regardless of who initiated).
+    boost_type: Instant
+    cancel: true
+    boost: Advance 3.
+    boost_name: DASH
+  - name: Dive
+    kind: Normal
+    range: 1
+    power: 5
+    speed: 4
+    armor: 0
+    guard: 0
+    description: |-
+      BEFORE: Advance 3; if you
+      Advanced past the opponent,
+      their attacks do not hit you.
+    boost_type: Instant
+    cancel: true
+    boost: Discard a Continuous Boost from play.
+    boost_name: UKEMI
+  - name: Dust
+    kind: Normal
+    range: 2-3
+    power: 5
+    speed: 3
+    armor: 0
+    guard: 4
+    description: Ignore Armor. Ignore Guard.
+    boost_type: Continuous
+    cancel: true
+    boost: |-
+      +4 Guard
+      At the start of your turn, add
+      this to your Gauge.
+    boost_name: FAULTLESS DEFENSE
+  - name: Sweep
+    kind: Normal
+    range: 1-3
+    power: 6
+    speed: 2
+    armor: 0
+    guard: 6
+    description: |-
+      HIT: The opponent must
+      discard a random card.
+    boost_type: Continuous
+    cancel: true
+    boost: |-
+      Your attack is EX (EX Attacks have
+      +1 Power, +1 Speed,
+      +1 Armor, and +1 Guard).
+    boost_name: BADASS
+  - name: Focus
+    kind: Normal
+    range: 1-2
+    power: 4
+    speed: 1
+    armor: 2
+    guard: 5
+    description: |-
+      You cannot be Pushed or Pulled.
+      AFTER: Draw 1.
+    boost_type: Continuous
+    cancel: true
+    boost: |-
+      When you initiate a Strike, the opponent
+      must respond with a Wild Swing.
+    boost_name: SCRAMBLE
+  - name: Block
+    kind: Normal
+    range: "-"
+    power: "-"
+    speed: 0
+    armor: 2
+    guard: 3
+    description: |-
+      When you are hit (after Hit effects),
+      spend any amount of Force. For
+      each Force spent, +2 Armor.
+      AFTER: Add this to your Gauge.
+    boost_type: Instant
+    boost: |-
+      Name a card. The opponent must discard a
+      copy of that card or reveal a hand with none.
+    boost_name: PARRY
+
 fonts:
   title:
     regular:
@@ -24,6 +148,7 @@ fonts:
       file: assets/Montserrat-Italic-VariableFont_wght.ttf
       size: 30
       variation: Italic
+
 layers:
   - match: kind
     Innate|Exceed:
