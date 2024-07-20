@@ -1,17 +1,29 @@
 fonts:
   title:
-    file: assets/Impact-Strive.otf
-    size: 40
+    regular:
+      file: assets/Impact-Strive.otf
+      size: 40
+  character_name:
+    regular:
+      file: assets/Impact-Strive.otf
+      size: 56
   gauge:
-    file: assets/Impact-Strive.otf
-    size: 66
+    regular:
+      file: assets/Impact-Strive.otf
+      size: 66
   text:
-    file: assets/Montserrat-VariableFont_wght.ttf
-    size: 30
-    variations:
-      regular: Regular
-      bold: Bold
-      italic: Italic
+    regular:
+      file: assets/Montserrat-VariableFont_wght.ttf
+      size: 30
+      variation: Regular
+    bold:
+      file: assets/Montserrat-VariableFont_wght.ttf
+      size: 30
+      variation: Bold
+    italic:
+      file: assets/Montserrat-Italic-VariableFont_wght.ttf
+      size: 30
+      variation: Italic
 layers:
   - match: kind
     Innate|Exceed:
@@ -26,7 +38,7 @@ layers:
         fill: "#00adef"
       - text: name
         xy: [65, 725]
-        font: title
+        font: character_name
         fill: white
       - text: description
         rich: true
@@ -68,24 +80,24 @@ layers:
         xy: [96, 680]
         font: text
         width: 570
-        align: true
         fill: white
       - text: range
-        centered: true
-        xy: [49, 222]
-        width: 60
+        xy: [75, 222]
+        anchor: ma
         font: title
         fill: white
         stroke_width: 2
         stroke_fill: "#374fa2"
       - text: power
-        xy: [49, 312]
+        xy: [60, 312]
+        anchor: ma
         font: title
         fill: white
         stroke_width: 2
         stroke_fill: "#6a1f1f"
       - text: speed
-        xy: [49, 402]
+        xy: [60, 402]
+        anchor: ma
         font: title
         fill: white
         stroke_width: 2
@@ -94,7 +106,8 @@ layers:
         .+:
           - image: assets/special-armor.png
           - text: armor
-            xy: [49, 492]
+            xy: [60, 492]
+            anchor: ma
             font: title
             fill: white
             stroke_width: 2
@@ -103,7 +116,8 @@ layers:
         .+:
           - image: assets/special-guard.png
           - text: guard
-            xy: [49, 584]
+            xy: [60, 584]
+            anchor: ma
             font: title
             fill: white
             stroke_width: 2

@@ -177,8 +177,7 @@ class Schema:
                     Map({"offset": expr(xy), "fill": expr(color)})
                 ),
                 Optional("rich"): expr(Bool()),
-                Optional("align"): expr(Bool()),
-                Optional("centered"): expr(Bool()),
+                Optional("anchor"): expr(Str()),
                 Optional("stroke_width"): expr(Int()),
                 Optional("stroke_fill"): expr(color),
             }
@@ -197,17 +196,22 @@ class Schema:
     match = MapCombined({"match": Str()}, Str(), Any())
     layers = Seq(MapPattern(Str(), Any()).and_then(text.or_else(image.or_else(match))))
     match.on_success = MapCombined({"match": Str()}, Str(), layers)
+    font = Map(
+        {
+            "file": expr(Str()),
+            "size": expr(Int()),
+            Optional("variation"): expr(Str()),
+        }
+    )
     schema = Map(
         {
             "fonts": MapPattern(
                 Str(),
                 Map(
                     {
-                        "file": Str(),
-                        "size": Int(),
-                        Optional("variations"): Map(
-                            {"regular": Str(), "bold": Str(), "italic": Str()}
-                        ),
+                        "regular": font,
+                        Optional("bold"): font,
+                        Optional("italic"): font,
                     }
                 ),
             ),
@@ -258,8 +262,12 @@ def chain_revalidate(yaml: YAML, revalidator=None, errs: tuple[YAMLError, ...] =
 def interpret(data: dict, row: dict[str, str]) -> Image.Image:
     img = Image.new("RGB", (750, 1024))
     fonts = {
-        name: ImageFont.truetype(font["file"], size=font["size"])
-        for name, font in data["fonts"].items()
+        name: FontFamily(
+            regular := load_font(**fonts["regular"]),
+            load_font(**fonts["bold"]) if fonts.get("bold") else regular,
+            load_font(**fonts["italic"]) if fonts.get("italic") else regular,
+        )
+        for name, fonts in data["fonts"].items()
     }
     for layer in data["layers"]:
         interpret_layer(layer, img, row, fonts)
@@ -267,23 +275,29 @@ def interpret(data: dict, row: dict[str, str]) -> Image.Image:
 
 
 def interpret_layer(
-    layer: dict, img: Image.Image, row: dict[str, str], fonts: dict[str, ImageFont]
+    layer: dict,
+    img: Image.Image,
+    row: dict[str, str],
+    fonts: dict[str, FontFamily],
 ):
     if "text" in layer:
         data = interpret_all_expressions(layer, row)
         text_kwargs = dict(
             text=row[data["text"]],
             img=img,
-            font=fonts[data["font"]],
+            font=fonts[data["font"]].regular,
             topleft=data["xy"],
             fill=data["fill"],
-            # width=data.get("width"),
-            # rich=data.get("rich"),
-            # align=data.get("align"),
-            # centered=data.get("centered"),
+            anchor=data.get("anchor", "la"),
             stroke_width=data.get("stroke_width", 0),
             stroke_fill=data.get("stroke_fill"),
         )
+        if data.get("rich"):
+            func = rich_text
+            text_kwargs["family"] = fonts[data["font"]]
+            text_kwargs["max_width"] = data["width"]
+        else:
+            func = text
         if data.get("shadow"):
             shadow_kwargs = text_kwargs.copy()
             shadow_kwargs["fill"] = data["shadow"]["fill"]
@@ -291,8 +305,8 @@ def interpret_layer(
                 shadow_kwargs["topleft"][0] + data["shadow"]["offset"][0],
                 shadow_kwargs["topleft"][1] + data["shadow"]["offset"][1],
             )
-            text(**shadow_kwargs)
-        text(**text_kwargs)
+            func(**shadow_kwargs)
+        func(**text_kwargs)
 
     elif "image" in layer:
         data = interpret_all_expressions(layer, row)
@@ -353,27 +367,7 @@ def text(
     topleft: tuple[int, int],
     **text_kwargs,
 ):
-    ImageDraw.Draw(img).text(topleft, text, font=font, **text_kwargs)
-
-
-# horizontally centered text
-def centered_text(
-    text: str,
-    *,
-    img: Image,
-    font: ImageFont.ImageFont,
-    topleft: tuple[int, int],
-    max_width: int,
-    **text_kwargs,
-):
-    draw = ImageDraw.Draw(img)
-    msg_size = draw.textbbox((0, 0), text, font=font)[2:]
-    draw.text(
-        (topleft[0] + (max_width - msg_size[0]) / 2, topleft[1]),
-        text,
-        font=font,
-        **text_kwargs,
-    )
+    ImageDraw.Draw(img).multiline_text(topleft, text, font=font, **text_kwargs)
 
 
 # draw lines with horizontal centering and rich text formatting
@@ -422,7 +416,7 @@ def rich_text(
             return x, topleft[1]
 
         def draw_text(i, text, font, bold, italic, color):
-            draw.text(xy(i), text, font=font, fill=color, **text_kwargs)
+            draw.text(xy(i), text, **{**text_kwargs, "font": font, "fill": color})
 
         def draw_icon(i, icon):
             x, y = xy(i)
@@ -654,6 +648,15 @@ def image_grid(images: list[Image.Image], w: int, h: int) -> Image.Image:
     for i, img in enumerate(images):
         grid.paste(img, ((i % w) * width, (i // w) * height))
     return grid
+
+
+def load_font(
+    file: str, size: int, variation: str | None = None
+) -> ImageFont.ImageFont:
+    font = ImageFont.truetype(file, size=size)
+    if variation:
+        font.set_variation_by_name(variation)
+    return font
 
 
 if __name__ == "__main__":
