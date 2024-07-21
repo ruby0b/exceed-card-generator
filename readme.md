@@ -11,8 +11,9 @@ Arguments used: `input/Slayer --no-duplicates --grid 6x3`
 ### Usage
 
 - Using [nix](https://nixos.org/): `nix run github:ruby0b/exceed-card-generator -- --help`
-- Otherwise, make sure python and pillow are installed: `pip install -r requirements.txt`
-  - Run the script: `python main.py --help`
+- Otherwise, make sure python and poetry are installed: `pip install -U poetry`
+  - Install the dependencies: `poetry install`
+  - Run the script: `poetry run exceed-card-generator`
   - Make sure to have the assets subdir in the current working directory (or set the ASSETS environment variable)
 
 ### Help

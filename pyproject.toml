@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "exceed-card-generator"
+version = "0.1.0"
+description = ""
+authors = []
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pillow = "^10.3.0"
+strictyaml = "^1.7.3"
+
+[tool.poetry.scripts]
+exceed-card-generator = "exceed_card_generator.__main__:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -8,31 +8,34 @@
       forAllSystems = function: inputs.nixpkgs.lib.genAttrs
         [ "x86_64-linux" "aarch64-linux" ]
         (system: function inputs.nixpkgs.legacyPackages.${system});
-      binFor = pkgs: pkgs.writers.writePython3Bin
-        "exceed-card-generator"
-        { libraries = with pkgs.python3.pkgs; [ pillow strictyaml ]; }
-        ("__import__('os').environ.setdefault('ASSETS', '${./assets}')\n"
-          + builtins.readFile ./exceed_card_generator/main.py);
+
+      pythonDeps = ps: with ps; [ pillow strictyaml ];
+
+      pkg = { python3 }: python3.pkgs.buildPythonApplication {
+        pname = "exceed-card-generator";
+        version = "0.1.0";
+        src = ./.;
+        pyproject = true;
+        build-system = [ python3.pkgs.poetry-core ];
+        dependencies = pythonDeps python3.pkgs;
+        postFixup = ''
+          wrapProgram $out/bin/exceed-card-generator --set ASSETS ${./assets}
+        '';
+      };
     in
     {
-      packages = forAllSystems (pkgs: {
-        default = binFor pkgs;
-        exceed-card-generator = binFor pkgs;
+      packages = forAllSystems (pkgs: rec {
+        default = exceed-card-generator;
+        exceed-card-generator = pkgs.callPackage pkg { };
       });
 
       overlays.default = prev: final: {
-        exceed-card-generator = binFor final;
+        exceed-card-generator = final.callPackage pkg { };
       };
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [
-            (python3.withPackages (ps: with ps; [
-              pillow
-              strictyaml
-            ]))
-            uv
-          ];
+          packages = [ (pkgs.python3.withPackages pythonDeps) pkgs.poetry ];
         };
       });
     };
