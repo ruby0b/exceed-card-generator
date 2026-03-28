@@ -30,7 +30,7 @@
       });
 
       overlays.default = final: prev: {
-        exceed-card-generator = final.callPackage pkg { };
+        exceed-card-generator = prev.callPackage pkg { };
       };
 
       devShells = forAllSystems (pkgs: {
