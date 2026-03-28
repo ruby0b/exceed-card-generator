@@ -29,7 +29,7 @@
         exceed-card-generator = pkgs.callPackage pkg { };
       });
 
-      overlays.default = prev: final: {
+      overlays.default = final: prev: {
         exceed-card-generator = final.callPackage pkg { };
       };
 
